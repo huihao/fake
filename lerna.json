@@ -1,0 +1,11 @@
+{
+  "packages": [
+    "packages/shared/**",
+    "packages/fake/**",
+    "packages/fake-dom/**",
+    "packages/fake-reconciler/**"
+  ],
+  "version": "independent",
+  "npmClient": "yarn",
+  "useWorkspaces": true
+}

@@ -1,0 +1,22 @@
+{
+  "name": "fake-reconciler",
+  "version": "0.0.1",
+  "description": "拦截用户信息并发送信息给用户的核心功能",
+  "main": "lib/index.js",
+  "scripts": {
+    "compile": "tsc",
+    "test": "jest"
+  },
+  "types": "lib/index.d.ts",
+  "keywords": [],
+  "author": "kmkf",
+  "license": "MIT",
+  "dependencies": {
+    "@types/node": "^14.11.8",
+    "fake-dom": "*",
+    "shared": "*"
+  },
+  "devDependencies": {
+    "typescript": "4.1.3"
+  }
+}
