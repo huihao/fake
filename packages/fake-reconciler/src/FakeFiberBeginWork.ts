@@ -21,18 +21,26 @@ import {
   NoFlags,
   ForceUpdateForLegacySuspense,
   ContentReset,
+  PerformedWork,
+  Placement,
 } from './FakeFiberFlags';
 import { includesSomeLane, Lanes, NoLanes } from './FakeFiberLane';
 import { Fiber, FiberRoot } from './FakeInternalTypes';
-import { cloneUpdateQueue, processUpdateQueue } from './FakeUpdateQueue';
+import {
+  cloneUpdateQueue,
+  initializeUpdateQueue,
+  processUpdateQueue,
+} from './FakeUpdateQueue';
 import {
   CacheComponent,
   ClassComponent,
   ContextProvider,
+  FunctionComponent,
   HostComponent,
   HostPortal,
   HostRoot,
   HostText,
+  IndeterminateComponent,
   LegacyHiddenComponent,
   OffscreenComponent,
   Profiler,
@@ -44,7 +52,18 @@ import {
   hasContextChanged,
   pushTopLevelContextObject,
 } from './FakeFiberContext';
-import { pushHostContainer, pushHostContext } from './FakeFiberHostContext';
+import {
+  prepareToReadContext,
+  pushHostContainer,
+  pushHostContext,
+} from './FakeFiberHostContext';
+import {
+  disableLegacyContext,
+  disableModulePatternComponents,
+} from 'shared/src/FakeFeatureFlags';
+import { StrictMode } from './FakeTypeOfMode';
+import { bailoutHooks, renderWithHooks } from './FakeFiberHooks';
+import { resolveDefaultProps } from './FakeFiberLazyComponent';
 
 let didReceiveUpdate: boolean = false;
 
@@ -62,12 +81,35 @@ export function beginWork(
   // move this assignment out of the common path and into each branch.
 
   switch (workInProgress.tag) {
+    case IndeterminateComponent: {
+      return mountIndeterminateComponent(
+        current,
+        workInProgress,
+        workInProgress.type,
+        renderLanes,
+      );
+    }
     case HostRoot:
       return updateHostRoot(current, workInProgress, renderLanes);
     case HostComponent:
       return updateHostComponent(current, workInProgress, renderLanes);
     case HostText:
       return updateHostText(current, workInProgress);
+    case FunctionComponent: {
+      const Component = workInProgress.type;
+      const unresolvedProps = workInProgress.pendingProps;
+      const resolvedProps =
+        workInProgress.elementType === Component
+          ? unresolvedProps
+          : resolveDefaultProps(Component, unresolvedProps);
+      return updateFunctionComponent(
+        current,
+        workInProgress,
+        Component,
+        resolvedProps,
+        renderLanes,
+      );
+    }
   }
 }
 
@@ -192,4 +234,144 @@ export function reconcileChildren(
       renderLanes,
     );
   }
+}
+
+function mountIndeterminateComponent(
+  _current,
+  workInProgress,
+  Component,
+  renderLanes,
+) {
+  if (_current !== null) {
+    // An indeterminate component only mounts if it suspended inside a non-
+    // concurrent tree, in an inconsistent state. We want to treat it like
+    // a new mount, even though an empty version of it already committed.
+    // Disconnect the alternate pointers.
+    _current.alternate = null;
+    workInProgress.alternate = null;
+    // Since this is conceptually a new fiber, schedule a Placement effect
+    workInProgress.flags |= Placement;
+  }
+
+  const props = workInProgress.pendingProps;
+  /*let context;
+  if (!disableLegacyContext) {
+    const unmaskedContext = getUnmaskedContext(
+      workInProgress,
+      Component,
+      false,
+    );
+    context = getMaskedContext(workInProgress, unmaskedContext);
+  }
+
+  prepareToReadContext(workInProgress, renderLanes);*/
+  let value;
+
+  value = renderWithHooks(
+    null,
+    workInProgress,
+    Component,
+    props,
+    null,
+    renderLanes,
+  );
+
+  // React DevTools reads this flag.
+  workInProgress.flags |= PerformedWork;
+
+  if (
+    // Run these checks in production only if the flag is off.
+    // Eventually we'll delete this branch altogether.
+    !disableModulePatternComponents &&
+    typeof value === 'object' &&
+    value !== null &&
+    typeof value.render === 'function' &&
+    value.$$typeof === undefined
+  ) {
+    // Proceed under the assumption that this is a class instance
+    /*
+    workInProgress.tag = ClassComponent;
+
+    // Throw out any hooks that were used.
+    workInProgress.memoizedState = null;
+    workInProgress.updateQueue = null;
+
+    // Push context providers early to prevent context stack mismatches.
+    // During mounting we don't know the child context yet as the instance doesn't exist.
+    // We will invalidate the child context in finishClassComponent() right after rendering.
+    let hasContext = false;
+    if (isLegacyContextProvider(Component)) {
+      hasContext = true;
+      pushLegacyContextProvider(workInProgress);
+    } else {
+      hasContext = false;
+    }
+
+    workInProgress.memoizedState =
+      value.state !== null && value.state !== undefined ? value.state : null;
+
+    initializeUpdateQueue(workInProgress);
+
+    const getDerivedStateFromProps = Component.getDerivedStateFromProps;
+    if (typeof getDerivedStateFromProps === 'function') {
+      applyDerivedStateFromProps(
+        workInProgress,
+        Component,
+        getDerivedStateFromProps,
+        props,
+      );
+    }
+
+    adoptClassInstance(workInProgress, value);
+    mountClassInstance(workInProgress, Component, props, renderLanes);
+    return finishClassComponent(
+      null,
+      workInProgress,
+      Component,
+      true,
+      hasContext,
+      renderLanes,
+    );*/
+  } else {
+    // Proceed under the assumption that this is a function component
+    workInProgress.tag = FunctionComponent;
+    reconcileChildren(null, workInProgress, value, renderLanes);
+    return workInProgress.child;
+  }
+}
+
+function updateFunctionComponent(
+  current,
+  workInProgress,
+  Component,
+  nextProps: any,
+  renderLanes,
+) {
+  let context;
+
+  let nextChildren;
+  prepareToReadContext(workInProgress, renderLanes);
+
+  nextChildren = renderWithHooks(
+    current,
+    workInProgress,
+    Component,
+    nextProps,
+    context,
+    renderLanes,
+  );
+
+  if (current !== null && !didReceiveUpdate) {
+    bailoutHooks(current, workInProgress, renderLanes);
+    return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
+  }
+
+  // React DevTools reads this flag.
+  workInProgress.flags |= PerformedWork;
+  reconcileChildren(current, workInProgress, nextChildren, renderLanes);
+  return workInProgress.child;
+}
+
+export function markWorkInProgressReceivedUpdate() {
+  didReceiveUpdate = true;
 }

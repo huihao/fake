@@ -5,7 +5,7 @@
   "main": "lib/index.js",
   "scripts": {
     "compile": "tsc",
-    "test": "jest"
+    "test": "jest --watch"
   },
   "types": "lib/index.d.ts",
   "keywords": [],

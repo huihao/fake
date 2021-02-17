@@ -70,3 +70,7 @@ export function mergeLanes(a: Lanes | Lane, b: Lanes | Lane): Lanes {
 export function includesSomeLane(a: Lanes | Lane, b: Lanes | Lane) {
   return (a & b) !== NoLanes;
 }
+
+export function removeLanes(set: Lanes, subset: Lanes | Lane): Lanes {
+  return set & ~subset;
+}

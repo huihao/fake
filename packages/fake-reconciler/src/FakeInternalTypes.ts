@@ -1,5 +1,6 @@
 import { WorkTag } from './FakeWorkTags';
 import { RootTag } from './FakeRootTags';
+import { FakeContext } from 'shared/src/FakeTypes';
 
 export type HookType =
   | 'useState'
@@ -195,3 +196,21 @@ type BaseFiberRootProperties = {
 };
 
 export type FakePriorityLevel = 99 | 98 | 97 | 96 | 95 | 90;
+
+type BasicStateAction<S> = (state: S) => S | S;
+type Dispatch<A> = (action: A) => void;
+
+export type Dispatcher = {
+  useState<S>(initialState: (() => S) | S): [S, Dispatch<BasicStateAction<S>>];
+  useReducer<S, I, A>(
+    reducer: (S, A) => S,
+    initialArg: I,
+    init?: (I) => S,
+  ): [S, Dispatch<A>];
+};
+
+export type ContextDependency<T> = {
+  context: FakeContext<T>;
+  observedBits: number;
+  next: ContextDependency<any> | null;
+};

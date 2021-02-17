@@ -32,7 +32,18 @@ describe('ReactDOM', () => {
     dom.innerHTML = 'test';
     document.body.append(dom);
     FakeDOM.render(element, dom);
-    console.log(document.body.innerHTML);
     expect(dom.innerHTML).toBe('<span><div>hello</div></span>');
+  });
+
+  it('render a function component', () => {
+    const App = () => {
+      const [count, setCount] = Fake.useState(0);
+      /** @jsx Fake.createElement */
+      return <div>hello{count}</div>;
+    };
+    const dom = document.createElement('div');
+    document.body.append(dom);
+    FakeDOM.render(<App />, dom);
+    expect(dom.innerHTML).toBe('hello');
   });
 });

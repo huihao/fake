@@ -4,11 +4,18 @@ import {
   getRootHostContext,
   HostContext,
 } from 'fake-dom/src/FakeDOMHostConfig';
+import { FakeContext } from 'shared/src/FakeTypes';
+import { markWorkInProgressReceivedUpdate } from './FakeFiberBeginWork';
+import { includesSomeLane, Lanes } from './FakeFiberLane';
 import { StackCursor, createCursor, pop, push } from './FakeFiberStack';
-import { Fiber } from './FakeInternalTypes';
+import { ContextDependency, Fiber } from './FakeInternalTypes';
 
 declare class NoContextT {}
 const NO_CONTEXT: NoContextT = {} as any;
+
+let currentlyRenderingFiber: Fiber | null = null;
+let lastContextDependency: ContextDependency<any> | null = null;
+let lastContextWithAllBitsObserved: FakeContext<any> | null = null;
 
 const contextStackCursor: StackCursor<HostContext | NoContextT> = createCursor(
   NO_CONTEXT,
@@ -78,4 +85,26 @@ function popHostContainer(fiber: Fiber) {
   pop(contextStackCursor, fiber);
   pop(contextFiberStackCursor, fiber);
   pop(rootInstanceStackCursor, fiber);
+}
+
+export function prepareToReadContext(
+  workInProgress: Fiber,
+  renderLanes: Lanes,
+): void {
+  currentlyRenderingFiber = workInProgress;
+  lastContextDependency = null;
+  lastContextWithAllBitsObserved = null;
+
+  const dependencies = workInProgress.dependencies;
+  if (dependencies !== null) {
+    const firstContext = dependencies.firstContext;
+    if (firstContext !== null) {
+      if (includesSomeLane(dependencies.lanes, renderLanes)) {
+        // Context list has a pending update. Mark that this fiber performed work.
+        markWorkInProgressReceivedUpdate();
+      }
+      // Reset the work-in-progress list
+      dependencies.firstContext = null;
+    }
+  }
 }
